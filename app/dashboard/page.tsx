@@ -14,15 +14,6 @@ export default function DashboardPage() {
   const [pingResult, setPingResult] = useState<string | null>(null);
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-  useEffect(() => {
-    fetch(`${backendUrl}/ping`)
-      .then((res) => res.json())
-      .then((data) => {
-        setPingResult(data.status);
-      })
-      .catch(() => setPingResult("error"));
-  }, [backendUrl]);
-
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -30,7 +21,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">System Dashboard</h1>
           <p className="text-muted-foreground">
-            Monitor and manage your Alumni Portal infrastructure {pingResult}
+            Monitor and manage your Alumni Portal infrastructure
           </p>
         </div>
         <div className="flex items-center space-x-3">
