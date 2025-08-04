@@ -11,7 +11,7 @@ import { Eye, EyeOff, Shield, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, checking } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +72,7 @@ export default function LoginPage() {
                   placeholder="admin@alumniportal.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
+                  disabled={checking}
                   required
                 />
               </div>
@@ -86,7 +86,7 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
+                    disabled={checking}
                     required
                   />
                   <Button
@@ -95,7 +95,7 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
+                    disabled={checking}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -109,9 +109,9 @@ export default function LoginPage() {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={isLoading}
+                disabled={checking}
               >
-                {isLoading ? (
+                {checking ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Signing in...
