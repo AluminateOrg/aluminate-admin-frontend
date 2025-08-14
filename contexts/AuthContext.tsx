@@ -2,9 +2,14 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useDispatch, useSelector } from 'react-redux';
+import axiosGlobal from '@/axiosInstances/axiosGlobal';
+import axiosSuperAdmin from '@/axiosInstances/axiosSuperAdmin';
+import { logoutUser, setAdmin } from '@/redux/userSlice'; // <-- Import your setUser action creator
+import { encryptObject, importPublicKey } from '@/util/rsa';
 
 interface User {
-  id: string;
+  id: number;
   email: string;
   name: string;
   role: 'admin' | 'super_admin';
@@ -12,7 +17,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  isLoading: boolean;
+  checking: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -20,89 +25,117 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock admin users for demo
-const MOCK_USERS = [
-  {
-    id: 'admin_001',
-    email: 'admin@alumniportal.com',
-    password: 'admin123',
-    name: 'John Doe',
-    role: 'super_admin' as const
-  },
-  {
-    id: 'admin_002',
-    email: 'sarah@alumniportal.com',
-    password: 'sarah123',
-    name: 'Sarah Johnson',
-    role: 'admin' as const
-  }
-];
+
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [checking, setChecking] = useState(true);
   const router = useRouter();
+  const userGlobal = useSelector((state: any) => state.user);
+  const admin = userGlobal?.user;
+  const isAdminAuthenticated = userGlobal.isAuthenticated;
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    // Check for stored auth token on mount
-    const token = localStorage.getItem('admin_token');
-    const userData = localStorage.getItem('admin_user');
     
-    if (token && userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch (error) {
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_user');
-      }
-    }
-    
-    setIsLoading(false);
+    checkAuth();
+
   }, []);
 
-  const login = async (email: string, password: string): Promise<void> => {
-    setIsLoading(true);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
-    
-    if (!mockUser) {
-      setIsLoading(false);
-      throw new Error('Invalid credentials');
+  const checkAuth = async() => {
+
+      setChecking(true);
+      console.log('Checking authentication status...');
+      //check if user is logged in
+      try {
+        if(isAdminAuthenticated && admin) {
+        setUser(admin);
+      } else {
+        
+        const res = await axiosSuperAdmin.get('/info/getAdminInfo');
+        if(!res.status || res.status !== 200) {
+          logout();
+          return;
+        }
+        const adminData = res.data.data;
+       
+        setUser({
+          id: adminData.id,
+          email: adminData.email,
+          name: adminData.name,
+          role: 'super_admin',
+        });
+        dispatch(setAdmin({ user: {
+          id: adminData.id,
+          email: adminData.email,
+          name: adminData.name,
+          role: 'super_admin',
+        }}));
+        
+      }
+      } catch (error) {
+        console.error('Error fetching admin info:', error);
+
+      }finally{
+        setChecking(false);
+        
+      }
+      
+      
     }
 
-    const userData = {
-      id: mockUser.id,
-      email: mockUser.email,
-      name: mockUser.name,
-      role: mockUser.role
-    };
-
-    // Store auth data
-    localStorage.setItem('admin_token', 'mock_jwt_token');
-    localStorage.setItem('admin_user', JSON.stringify(userData));
+  const login = async (email: string, password: string): Promise<void> => {
     
-    setUser(userData);
-    setIsLoading(false);
+    try {
+      //encrypt
+      const pem = process.env.NEXT_PUBLIC_GLOBAL_PUBLIC_KEY!;
+      const publicKey = await importPublicKey(pem);
+      const obj = {
+        email: email,
+        password: password
+      };
+      const payload = await encryptObject(obj, publicKey);
+      const res = await axiosGlobal.post('/auth/login', {payload});
+      if (res.status === 200) {
+        
+        await checkAuth();
+        router.push('/dashboard');
+      } else {
+        throw new Error('Login failed');
+        console.error('Login failed:', res.statusText);
+      }
+    } catch (error) {
+      throw error; // Rethrow the error to be handled in the component
+      console.error('Login error:', error);
+    }
     
-    // Redirect to dashboard
-    router.push('/dashboard');
+    
   };
 
-  const logout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    setUser(null);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      
+      const res = await axiosGlobal.post('/auth/logout');
+      if (res.status === 200) {
+        setUser(null);
+        dispatch(logoutUser());
+       
+        router.push('/admin/login');
+      }else{
+        console.error('Logout failed:', res.statusText);
+      }
+
+    } catch (error) {
+      console.error('Logout failed:', error);
+      
+    }
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isLoading,
+        checking,
         login,
         logout,
         isAuthenticated: !!user
