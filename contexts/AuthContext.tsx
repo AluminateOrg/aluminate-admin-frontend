@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import axiosGlobal from '@/axiosInstances/axiosGlobal';
 import axiosSuperAdmin from '@/axiosInstances/axiosSuperAdmin';
 import { logoutUser, setAdmin } from '@/redux/userSlice'; // <-- Import your setUser action creator
+import { encryptObject, importPublicKey } from '@/util/rsa';
 
 interface User {
   id: number;
@@ -86,11 +87,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string): Promise<void> => {
     
     try {
-      
-      const res = await axiosGlobal.post('/auth/login', { email, password });
+      //encrypt
+      const pem = process.env.NEXT_PUBLIC_GLOBAL_PUBLIC_KEY!;
+      const publicKey = await importPublicKey(pem);
+      const obj = {
+        email: email,
+        password: password
+      };
+      const payload = await encryptObject(obj, publicKey);
+      const res = await axiosGlobal.post('/auth/login', {payload});
       if (res.status === 200) {
-         
-        console.log('Login successful:', res);
+        
         await checkAuth();
         router.push('/dashboard');
       } else {
