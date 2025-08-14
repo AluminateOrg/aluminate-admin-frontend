@@ -124,24 +124,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Credentials */}
-        <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm text-blue-800 dark:text-blue-200">
-              Demo Credentials
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 space-y-2 text-sm">
-            <div className="space-y-1">
-              <p className="font-medium text-blue-700 dark:text-blue-300">Super Admin:</p>
-              <p className="text-blue-600 dark:text-blue-400">admin@alumniportal.com / admin123</p>
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium text-blue-700 dark:text-blue-300">Admin:</p>
-              <p className="text-blue-600 dark:text-blue-400">sarah@alumniportal.com / sarah123</p>
-            </div>
-          </CardContent>
-        </Card>
+        
       </div>
     </div>
   );
