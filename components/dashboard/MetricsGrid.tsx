@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import {
   Server,
   Users,
@@ -88,9 +87,13 @@ export function MetricsGrid() {
               <p className="text-xs text-muted-foreground mt-1">
                 {metric.subtitle}
               </p>
-              {metric.progress !== undefined && (
+              {typeof metric.progress === "number" && !isNaN(metric.progress) ? (
                 <div className="mt-3">
                   <Progress value={metric.progress} className="h-2" />
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <Progress value={0} className="h-2" />
                 </div>
               )}
             </CardContent>
