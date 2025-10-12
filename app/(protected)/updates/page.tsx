@@ -476,7 +476,7 @@ export default function UpdatesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <Progress value={update.progress} className="w-20" />
+                        <Progress value={Number.isFinite(update.progress) ? update.progress : 0} className="w-20" />
                         <span className="text-xs text-muted-foreground">
                           {update.progress}%
                         </span>
