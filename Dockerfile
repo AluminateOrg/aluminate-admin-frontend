@@ -6,7 +6,8 @@
 FROM node:20-alpine AS builder
 
 # 1. Install necessary build tools (Git for submodules)
-RUN apk add --no-cache git
+
+# RUN apk add --no-cache git
 
 # 2. Set the working directory
 WORKDIR /app
@@ -25,7 +26,8 @@ COPY . .
 # 6. Initialize and update submodules if they are present within the context
 # NOTE: If your .git folder is not in the build context, this will fail.
 # For monorepos, you must adjust the docker-compose context as previously discussed.
-RUN git submodule update --init --recursive
+
+# RUN git submodule update --init --recursive
 
 # 7. Build the application
 # Use ARG to ensure the build argument is passed correctly
