@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axiosSuperAdmin from '@/axiosInstances/axiosSuperAdmin';
 import { useDispatch, useSelector } from 'react-redux';
-import { logoutUser, setUser } from '@/redux/userSlice';
+import { logoutUser, setAdmin } from '@/redux/userSlice';
 import axiosGlobal from '@/axiosInstances/axiosGlobal';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -59,7 +59,7 @@ export default function AuthGuard({ children }: Props) {
             const userData = res.data.data.superAdminDTO;
 
 
-          dispatch(setUser(userData));
+          dispatch(setAdmin(userData));
         } else {
           console.log('User not authenticated, redirecting to login');
           handleLogout();

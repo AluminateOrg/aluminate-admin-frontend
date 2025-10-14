@@ -55,7 +55,7 @@ export default function MonitoringPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgCpuUsage.toFixed(1)}%</div>
-            <Progress value={avgCpuUsage} className="mt-2" />
+            <Progress value={Number.isFinite(avgCpuUsage) ? avgCpuUsage : 0} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-1">
               Average CPU usage
             </p>
@@ -69,7 +69,7 @@ export default function MonitoringPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgMemoryUsage.toFixed(1)}%</div>
-            <Progress value={avgMemoryUsage} className="mt-2" />
+            <Progress value={Number.isFinite(avgMemoryUsage) ? avgMemoryUsage : 0} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-1">
               Average memory usage
             </p>
@@ -83,7 +83,7 @@ export default function MonitoringPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgDiskUsage.toFixed(1)}%</div>
-            <Progress value={avgDiskUsage} className="mt-2" />
+            <Progress value={Number.isFinite(avgDiskUsage) ? avgDiskUsage : 0} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-1">
               Average disk usage
             </p>

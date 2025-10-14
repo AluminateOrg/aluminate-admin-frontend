@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { MetricsGrid } from "@/components/dashboard/MetricsGrid";
 import { ContainerStatusChart } from "@/components/dashboard/ContainerStatusChart";
@@ -6,13 +6,9 @@ import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, TrendingUp, Users, Server } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertTriangle, TrendingUp } from "lucide-react";
 
 export default function DashboardPage() {
-  // check backend connectivity
-  const [pingResult, setPingResult] = useState<string | null>(null);
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   return (
     <div className="space-y-6">
