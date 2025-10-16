@@ -19,6 +19,7 @@ interface AuthContextType {
   user: User | null;
   checking: boolean;
   login: (email: string, password: string) => Promise<void>;
+  setChecking: (checking: boolean) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         checking,
+        setChecking,
         login,
         logout,
         isAuthenticated: !!user

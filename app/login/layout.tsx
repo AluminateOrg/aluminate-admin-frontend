@@ -1,3 +1,4 @@
+'use client';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { Toaster } from '@/components/ui/sonner';
 

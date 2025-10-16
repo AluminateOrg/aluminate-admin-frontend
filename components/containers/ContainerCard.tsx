@@ -111,7 +111,7 @@ export function ContainerCard({ container, onAction }: ContainerCardProps) {
                 Backup
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => onAction('terminate', container.id)}
                 className="text-destructive"
               >
@@ -121,7 +121,7 @@ export function ContainerCard({ container, onAction }: ContainerCardProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <Badge className={getStatusColor(container.status)}>
             {container.status}
@@ -158,7 +158,11 @@ export function ContainerCard({ container, onAction }: ContainerCardProps) {
               {container.memberCount.toLocaleString()} / {container.memberLimit.toLocaleString()}
             </span>
           </div>
-          <Progress value={memberUsagePercent} className="h-2" />
+          <Progress
+            value={Number.isFinite(memberUsagePercent) ? memberUsagePercent : 0}
+            className="h-2"
+          />
+
         </div>
 
         {container.status === 'running' && (
