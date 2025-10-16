@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,9 +37,37 @@ import {
   Trash2,
   Download,
   Upload,
+  Plus,
+  Edit,
+  DollarSign,
+  Cpu,
+  Users,
+  Clock,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { useTheme } from '@/contexts/ThemeContext';
 import { toast } from 'sonner';
+import axiosSuperAdmin from '@/axiosInstances/axiosSuperAdmin';
+import axiosGlobal from '@/axiosInstances/axiosGlobal';
+import { get } from 'node:http';
+
+// Map local feature keys to backend feature IDs
+const FEATURE_MAP: Record<string, number> = {
+  backups: 1,
+  monitoring: 2,
+  prioritySupport: 3,
+};
+
+
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -60,6 +88,134 @@ export default function SettingsPage() {
     sessionTimeout: '24',
     maxLoginAttempts: '5',
   });
+
+  // Subscriptions / Plans state
+  const [plans, setPlans] = useState(() => [
+    {
+      id: 'basic',
+      name: 'Basic',
+      storageGB: 10,
+      cpu: 1,
+      ramGB: 1,
+      maxMembers: 3,
+      durationMonths: 1,
+      price: 0,
+      features: { backups: false, monitoring: false, prioritySupport: false },
+    },
+    {
+      id: 'advance',
+      name: 'Advance',
+      storageGB: 50,
+      cpu: 2,
+      ramGB: 4,
+      maxMembers: 10,
+      durationMonths: 1,
+      price: 29,
+      features: { backups: true, monitoring: true, prioritySupport: false },
+    },
+    {
+      id: 'premium',
+      name: 'Premium',
+      storageGB: 200,
+      cpu: 4,
+      ramGB: 8,
+      maxMembers: 50,
+      durationMonths: 1,
+      price: 99,
+      features: { backups: true, monitoring: true, prioritySupport: true },
+    },
+  ]);
+
+  const [plansDialogOpen, setPlansDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(null as any);
+
+  const getPlans = async () => {
+    try {
+      const { data } = await axiosGlobal.get('/public/subscription-plan')
+      console.log("Data that fetched", data)
+      if (!Array.isArray(data)) {
+        setPlans([]);
+        return;
+      }
+      const mapped = data.map((p: any) => {
+        const features = {
+          backups: false,
+          monitoring: false,
+          prioritySupport: false,
+        };
+        (p.subscriptionPlanFeatures || []).forEach((sf:any) => {
+          const backendFeatureId = sf?.planFeature?.id ?? sf.featureId;
+          const enabled = Boolean(sf.enabled);
+
+          if (backendFeatureId === FEATURE_MAP.backups) features.backups = enabled;
+          if (backendFeatureId === FEATURE_MAP.monitoring) features.monitoring = enabled;
+          if (backendFeatureId === FEATURE_MAP.prioritySupport) features.prioritySupport = enabled;
+        });
+        return {
+          id: String(p.id),
+          name: p.name ?? '',
+          storageGB: p.storageInGB ?? p.storageInGb ?? 0,
+          cpu: p.cpu ?? 1,
+          ramGB: p.ram ?? p.ramGB ?? 1,
+          maxMembers: p.memberLimit ?? 1,
+          durationMonths: p.durationInMonths ?? 1,
+          price: p.price ?? 0,
+          features,
+        };
+      });
+
+      setPlans(mapped);
+    } catch (error) {
+      console.error('Failed to fetch plans', error);
+      toast.error('Failed to fetch plans');
+      setPlans([]); // clear plans on error
+    }
+  }
+
+  useEffect(() => {
+    getPlans()
+  },[])
+
+  const openCreateDialog = () => {
+    setEditingPlan(null);
+    setPlansDialogOpen(true);
+  };
+
+  const openEditDialog = (plan: any) => {
+    setEditingPlan(plan);
+    setPlansDialogOpen(true);
+  };
+
+  const handleSavePlan = (plan: any) => {
+    if (plan.id) {
+      // update
+      setPlans(prev => prev.map(p => (p.id === plan.id ? plan : p)));
+      toast.success('Plan updated');
+    } else {
+      // create new with generated id
+      const newPlan = { ...plan, id: `${plan.name.toLowerCase()}-${Date.now()}` };
+      setPlans(prev => [newPlan, ...prev]);
+      toast.success('Plan created');
+    }
+    setPlansDialogOpen(false);
+  };
+
+  const handleDeletePlan = async (id: string) => {
+    try {
+      
+      const {data} = await axiosGlobal.get(`/public/subscription-plan/delete/${id}`);
+      if (data) {
+        getPlans();
+        toast.success('Plan deleted');
+      } else {
+        toast.error('Failed to delete plan');
+        getPlans();
+      }
+    } catch (error) {
+      console.error('Failed to delete plan', error);
+      toast.error('Failed to delete plan');
+    }
+  };
 
   const handleSaveNotifications = async () => {
     toast.promise(
@@ -139,12 +295,13 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -530,7 +687,266 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Subscriptions / Plans */}
+        <TabsContent value="subscriptions" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="h-5 w-5" />
+                  <span>Subscription Plans</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Dialog open={plansDialogOpen} onOpenChange={setPlansDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={openCreateDialog}>
+                        <Plus className="h-4 w-4 mr-2" /> Create Plan
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle>
+                        <DialogDescription>
+                          Configure plan details including resources, limits and pricing.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <PlanForm
+                        initialData={editingPlan}
+                        onCancel={() => setPlansDialogOpen(false)}
+                        onSave={handleSavePlan}
+                      />
+
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button variant="ghost">Close</Button>
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-sm text-muted-foreground">
+                        <th className="p-2">Name</th>
+                        <th className="p-2">Storage (GB)</th>
+                        <th className="p-2">CPU</th>
+                        <th className="p-2">RAM (GB)</th>
+                        <th className="p-2">Max Members</th>
+                        <th className="p-2">Duration</th>
+                        <th className="p-2">Price</th>
+                        <th className="p-2">Features</th>
+                        <th className="p-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plans.map((plan: any) => (
+                        <tr key={plan.id} className="border-t">
+                          <td className="p-2 align-top font-medium">{plan.name}</td>
+                          <td className="p-2 align-top">{plan.storageGB}</td>
+                          <td className="p-2 align-top">{plan.cpu}</td>
+                          <td className="p-2 align-top">{plan.ramGB}</td>
+                          <td className="p-2 align-top">{plan.maxMembers}</td>
+                          <td className="p-2 align-top">{plan.durationMonths} month(s)</td>
+                          <td className="p-2 align-top">${plan.price}</td>
+                          <td className="p-2 align-top text-sm text-muted-foreground">
+                            {plan.features.backups && 'Backups '}
+                            {plan.features.monitoring && 'Monitoring '}
+                            {plan.features.prioritySupport && 'Priority Support'}
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="flex items-center space-x-2">
+                              <Button size="sm" variant="outline" onClick={() => openEditDialog(plan)}>
+                                <Edit className="h-4 w-4 mr-2" /> Edit
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="destructive">
+                                    <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Plan</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete the "{plan.name}" plan? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeletePlan(plan.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// PlanForm component inserted locally in this file
+function PlanForm({ initialData, onSave, onCancel }: any) {
+  const [form, setForm] = useState(() => ({
+    id: initialData?.id ?? undefined,
+    name: initialData?.name ?? '',
+    storageGB: initialData?.storageGB ?? 10,
+    cpu: initialData?.cpu ?? 1,
+    ramGB: initialData?.ramGB ?? 1,
+    maxMembers: initialData?.maxMembers ?? 1,
+    durationMonths: initialData?.durationMonths ?? 1,
+    price: initialData?.price ?? 0,
+    features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+  }));
+
+  // sync when editingPlan changes
+  useEffect(() => {
+    setForm({
+      id: initialData?.id ?? undefined,
+      name: initialData?.name ?? '',
+      storageGB: initialData?.storageGB ?? 10,
+      cpu: initialData?.cpu ?? 1,
+      ramGB: initialData?.ramGB ?? 1,
+      maxMembers: initialData?.maxMembers ?? 1,
+      durationMonths: initialData?.durationMonths ?? 1,
+      price: initialData?.price ?? 0,
+      features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+    });
+  }, [initialData]);
+
+  // Build payload expected by backend
+  const buildBackendPayload = () => ({
+    name: form.name,
+    price: Number(form.price),
+    memberLimit: Number(form.maxMembers),
+    durationInMonths: Number(form.durationMonths),
+    storageInGB: Number(form.storageGB),
+    cpu: Number(form.cpu),
+    ram: Number(form.ramGB),
+    feature: Object.keys(FEATURE_MAP).map((key) => ({
+      featureId: FEATURE_MAP[key],
+      enabled: Boolean((form.features as any)[key]),
+    })),
+  });
+
+  // Submit to backend (POST for create, PUT for update)
+  const onSubmit = async () => {
+    const payload = buildBackendPayload();
+
+    console.log("Payload  to submit:", payload);
+
+    try {
+      const request = form.id
+        ? axiosSuperAdmin.put(`/plans/${form.id}`, payload)
+        : axiosGlobal.post(`/public/subscription-plan/create`, payload);
+
+      const res = await toast.promise(request, {
+        loading: form.id ? 'Updating plan...' : 'Creating plan...',
+        success: form.id ? 'Plan updated' : 'Plan created',
+        error: 'Failed to save plan',
+      });
+
+      console.log("Response from server:", res);
+
+      const data = (res as any)?.data ?? {};
+
+      // Normalize back to local shape used in the UI
+      const localPlan = {
+        id: data.id ?? form.id ?? `${form.name.toLowerCase()}-${Date.now()}`,
+        name: form.name,
+        storageGB: form.storageGB,
+        cpu: form.cpu,
+        ramGB: form.ramGB,
+        maxMembers: form.maxMembers,
+        durationMonths: form.durationMonths,
+        price: form.price,
+        features: form.features,
+      };
+
+      onSave(localPlan);
+      
+    } catch (err) {
+      // toast.promise already shows error; ensure we don't swallow it
+      console.error('Plan submit error', err);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Name</Label>
+          <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Price (USD)</Label>
+          <Input type="number" value={form.price} onChange={e => setForm({ ...form, price: Number(e.target.value) })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Storage (GB)</Label>
+          <Input type="number" value={form.storageGB} onChange={e => setForm({ ...form, storageGB: Number(e.target.value) })} />
+        </div>
+        <div className="space-y-2">
+          <Label>CPU (vCPU)</Label>
+          <Input type="number" value={form.cpu} onChange={e => setForm({ ...form, cpu: Number(e.target.value) })} />
+        </div>
+        <div className="space-y-2">
+          <Label>RAM (GB)</Label>
+          <Input type="number" value={form.ramGB} onChange={e => setForm({ ...form, ramGB: Number(e.target.value) })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Max Members</Label>
+          <Input type="number" value={form.maxMembers} onChange={e => setForm({ ...form, maxMembers: Number(e.target.value) })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Duration (months)</Label>
+          <Input type="number" value={form.durationMonths} onChange={e => setForm({ ...form, durationMonths: Number(e.target.value) })} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Features</Label>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Switch checked={form.features.backups} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, backups: v } })} />
+            <span className="text-sm">Backups</span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={form.features.monitoring} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, monitoring: v } })} />
+            <span className="text-sm">Monitoring</span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={form.features.prioritySupport} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, prioritySupport: v } })} />
+            <span className="text-sm">Priority Support</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end space-x-2">
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button onClick={onSubmit}>
+          <Save className="h-4 w-4 mr-2" /> Save Plan
+        </Button>
+      </div>
     </div>
   );
 }
