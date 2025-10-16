@@ -131,7 +131,7 @@ export default function SettingsPage() {
 
   const getPlans = async () => {
     try {
-      const { data } = await axiosGlobal.get('/public/subscription-plan')
+      const { data } = await axiosSuperAdmin.get('/subscription-plan')
       console.log("Data that fetched", data)
       if (!Array.isArray(data)) {
         setPlans([]);
@@ -203,7 +203,7 @@ export default function SettingsPage() {
   const handleDeletePlan = async (id: string) => {
     try {
       
-      const {data} = await axiosGlobal.get(`/public/subscription-plan/delete/${id}`);
+      const {data} = await axiosSuperAdmin.get(`/subscription-plan/delete/${id}`);
       if (data) {
         getPlans();
         toast.success('Plan deleted');
@@ -855,7 +855,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
     try {
       const request = form.id
         ? axiosSuperAdmin.put(`/plans/${form.id}`, payload)
-        : axiosGlobal.post(`/public/subscription-plan/create`, payload);
+        : axiosSuperAdmin.post(`/subscription-plan/create`, payload);
 
       const res = await toast.promise(request, {
         loading: form.id ? 'Updating plan...' : 'Creating plan...',
