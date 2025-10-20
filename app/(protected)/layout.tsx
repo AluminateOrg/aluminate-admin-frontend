@@ -1,10 +1,11 @@
+// app/(protected)/layout.tsx
 'use client';
 
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 
-export default function UpdatesLayout({
+export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
