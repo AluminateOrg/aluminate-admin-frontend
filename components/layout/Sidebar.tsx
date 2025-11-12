@@ -16,10 +16,12 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  DollarSign
+  
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+
 
 const navigation = [
   {
@@ -33,6 +35,12 @@ const navigation = [
     href: '/containers',
     icon: Container,
     description: 'Manage all containers'
+  },
+  {
+    name: 'Finances',
+    href: '/finances',
+    icon: DollarSign,
+    description: 'Manage financial aspects'
   },
   {
     name: 'Provision',
