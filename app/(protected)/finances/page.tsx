@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Search as SearchIcon, CheckCircle, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import axiosSuperAdmin from "@/axiosInstances/axiosSuperAdmin";
 
 // --- Types ---
 interface Ticket {
@@ -38,49 +39,37 @@ interface FetchTicketsParams {
   from?: string; // ISO date
   to?: string; // ISO date
 }
-
-// --- Mock server layer ---
-const seedTickets = (() => {
-  const list: Ticket[] = [];
-  const orgs = [
-    "Green Leaf Florists",
-    "Sunrise Bakery",
-    "Oceanic Traders",
-    "Serendipity Crafts",
-    "Lotus Events",
-    "Ceylon Exports",
-  ];
-  for (let i = 1; i <= 42; i++) {
-    const org = orgs[i % orgs.length];
-    const status = i % 7 === 0 ? "PAID" : i % 11 === 0 ? "REJECTED" : "PENDING";
-    list.push({
-      id: `ticket_${i.toString().padStart(3, "0")}`,
-      organizationId: `org_${(i % orgs.length) + 1}`,
-      organizationName: org,
-      amount: Math.round((Math.random() * 10000 + 500) * 100) / 100,
-      issuedDate: new Date(Date.now() - i * 86400000).toISOString(),
-      status: status as Ticket["status"],
-    });
-  }
-  return list;
-})();
-
-// Simulate server fetch with offset/limit, search and date filters
-function mockFetchTickets(params: FetchTicketsParams): Promise<{ data: Ticket[]; total: number }> {
+//  server fetch with offset/limit, search and date filters
+async function fetchTickets(params: FetchTicketsParams): Promise<{ data: Ticket[]; total: number }> {
   const { offset, limit, search, status, from, to } = params;
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      let filtered = seedTickets.slice();
-      if (status) filtered = filtered.filter((t) => t.status === status);
-      if (search) filtered = filtered.filter((t) => t.organizationName.toLowerCase().includes(search.toLowerCase()));
-      if (from) filtered = filtered.filter((t) => new Date(t.issuedDate) >= new Date(from));
-      if (to) filtered = filtered.filter((t) => new Date(t.issuedDate) <= new Date(to));
-      const total = filtered.length;
-      const page = filtered.slice(offset, offset + limit);
-      resolve({ data: page, total });
-    }, 600 + Math.random() * 400); // simulate network
-  });
+
+  const query = new URLSearchParams();
+
+  query.append("offset", offset.toString());
+  query.append("limit", limit.toString());
+  if (search) query.append("search", search);
+  if (status) query.append("status", status);
+  if (from) query.append("from", from);
+  if (to) query.append("to", to);
+
+  try {
+    const res = await axiosSuperAdmin.get(`/orgTransaction/getTransactionTickets?${query.toString()}`);
+ 
+
+  if(res.status !== 200){ 
+    throw new Error('Failed to fetch tickets');
+  }
+
+
+  return res.data.data;
+  } catch (error) {
+    console.log("error-> ",error);
+    throw new Error('Failed to fetch tickets | Server error');
+  }
+
+  
 }
+
 
 function mockFetchBankDetails(orgId: string): Promise<BankDetails> {
   return new Promise((resolve) => {
@@ -94,12 +83,40 @@ function mockFetchBankDetails(orgId: string): Promise<BankDetails> {
   });
 }
 
-function mockMarkAsPaid(ticketId: string): Promise<{ success: boolean }> {
-  return new Promise((resolve) => setTimeout(() => resolve({ success: true }), 500));
+async function markAsPaid(ticketId: string): Promise<{ success: boolean }> {
+  try {
+    const res = await axiosSuperAdmin.put(`/orgTransaction/markAsPaid`, null, {
+      params: { ticketId }
+    });
+
+    if (res.status !== 200) {
+      throw new Error('Failed to mark ticket as paid');
+    }
+
+    return { success: true };
+
+  } catch (error) {
+    console.log("error-> ", error);
+    throw new Error('Failed to mark ticket as paid | Server error');
+  }
 }
 
-function mockRejectTicket(ticketId: string): Promise<{ success: boolean }> {
-  return new Promise((resolve) => setTimeout(() => resolve({ success: true }), 500));
+
+async function rejectTicket(ticketId: string): Promise<{ success: boolean }> {
+  
+  try {
+    const res = await axiosSuperAdmin.put(`/orgTransaction/reject`, null, {
+      params: { ticketId }
+    });
+
+    if(res.status !== 200){ 
+      throw new Error('Failed to reject ticket');
+    }
+  } catch (error) {
+    console.log("error-> ",error);
+    throw new Error('Failed to reject ticket | Server error');
+  }
+  return { success: true };
 }
 
 // --- UI Component ---
@@ -146,7 +163,7 @@ export default function FinancesPage() {
 
   async function fetchList() {
     setLoading(true);
-    const resp = await mockFetchTickets({ offset, limit, search, status: statusMap[activeTab], from: fromDate || undefined, to: toDate || undefined });
+    const resp = await fetchTickets({ offset, limit, search, status: statusMap[activeTab], from: fromDate || undefined, to: toDate || undefined });
     setTickets(resp.data);
     setTotal(resp.total);
     setLoading(false);
@@ -193,24 +210,20 @@ export default function FinancesPage() {
     setLoading(true);
 
     if (confirmAction === "pay") {
-      await mockMarkAsPaid(selected.id);
-      // mutate local seed (in real app server will return updated list on next fetch)
-      seedTickets.forEach((t) => {
-        if (t.id === selected.id) t.status = "PAID";
-      });
+      await markAsPaid(selected.id);
+      //fetch again
+      await fetchList();
+      
       setToast("Marked as paid");
     } else if (confirmAction === "reject") {
-      await mockRejectTicket(selected.id);
-      seedTickets.forEach((t) => {
-        if (t.id === selected.id) t.status = "REJECTED";
-      });
+      await rejectTicket(selected.id);
+      //fetch again
+      await fetchList();
       setToast("Ticket rejected");
     }
 
     setSelected(null);
     setConfirmAction(null);
-    // refresh current tab and also cause handled/rejected to refresh when user navigates
-    await fetchList();
     setLoading(false);
   }
 
