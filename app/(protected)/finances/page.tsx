@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, Search as SearchIcon, CheckCircle, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import axiosSuperAdmin from "@/axiosInstances/axiosSuperAdmin";
+import {toast} from "sonner";
 
 // --- Types ---
 interface Ticket {
@@ -92,7 +93,7 @@ async function markAsPaid(ticketId: string): Promise<{ success: boolean }> {
     if (res.status !== 200) {
       throw new Error('Failed to mark ticket as paid');
     }
-
+    toast.success('Ticket marked as paid');
     return { success: true };
 
   } catch (error) {
@@ -116,6 +117,7 @@ async function rejectTicket(ticketId: string): Promise<{ success: boolean }> {
     console.log("error-> ",error);
     throw new Error('Failed to reject ticket | Server error');
   }
+  toast.success('Ticket rejected');
   return { success: true };
 }
 
@@ -143,8 +145,7 @@ export default function FinancesPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"pay" | "reject" | null>(null);
 
-  // Simple toast message
-  const [toast, setToast] = useState<string | null>(null);
+
 
   const statusMap = useMemo(() => ({ unhandled: "PENDING", handled: "PAID", rejected: "REJECTED" }), []);
 
@@ -154,12 +155,7 @@ export default function FinancesPage() {
     setOffset(0);
   }, [activeTab, limit]);
 
-  useEffect(() => {
-    // clear toast after 3s
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
+
 
   async function fetchList() {
     setLoading(true);
@@ -214,12 +210,10 @@ export default function FinancesPage() {
       //fetch again
       await fetchList();
       
-      setToast("Marked as paid");
     } else if (confirmAction === "reject") {
       await rejectTicket(selected.id);
       //fetch again
       await fetchList();
-      setToast("Ticket rejected");
     }
 
     setSelected(null);
@@ -415,12 +409,7 @@ export default function FinancesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed right-6 bottom-6 rounded shadow-lg p-3 bg-white">
-          <div className="text-sm">{toast}</div>
-        </div>
-      )}
+      
     </div>
   );
 }
