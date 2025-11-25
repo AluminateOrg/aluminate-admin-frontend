@@ -129,6 +129,11 @@ export default function SettingsPage() {
   const [plansDialogOpen, setPlansDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null as any);
 
+  // Features state
+  const [features, setFeatures] = useState<any[]>([]);
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [newFeatureName, setNewFeatureName] = useState('');
+
   const getPlans = async () => {
     try {
       const { data } = await axiosSuperAdmin.get('/subscription-plan')
@@ -172,9 +177,20 @@ export default function SettingsPage() {
     }
   }
 
-  useEffect(() => {
-    getPlans()
-  },[])
+  const getFeatures = async () => {
+    try {
+      setFeaturesLoading(true);
+      const { data } = await axiosSuperAdmin.get('/feature');
+      console.log("Fetched features", data);
+      setFeatures(Array.isArray(data.data) ? data.data : []);
+    } catch (error) {
+      console.error('Failed to fetch features', error);
+      toast.error('Failed to fetch features');
+      setFeatures([]);
+    } finally {
+      setFeaturesLoading(false);
+    }
+  };
 
   const openCreateDialog = () => {
     setEditingPlan(null);
@@ -214,6 +230,44 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Failed to delete plan', error);
       toast.error('Failed to delete plan');
+    }
+  };
+
+  const handleCreateFeature = async () => {
+    const name = newFeatureName.trim();
+    if (!name) {
+      toast.error('Feature name is required');
+      return;
+    }
+    try {
+      await toast.promise(
+        axiosSuperAdmin.post('/feature/create', { name }),
+        {
+          loading: 'Creating feature...',
+          success: 'Feature created',
+          error: 'Failed to create feature',
+        }
+      );
+      setNewFeatureName('');
+      getFeatures();
+    } catch (error) {
+      console.error('Create feature error', error);
+    }
+  };
+
+  const handleDeleteFeature = async (id: string) => {
+    try {
+      await toast.promise(
+        axiosSuperAdmin.get(`/feature/delete/${id}`),
+        {
+          loading: 'Deleting feature...',
+          success: 'Feature deleted',
+          error: 'Failed to delete feature',
+        }
+      );
+      getFeatures();
+    } catch (error) {
+      console.error('Delete feature error', error);
     }
   };
 
@@ -272,6 +326,16 @@ export default function SettingsPage() {
     );
   };
 
+  useEffect(() => {
+    getPlans();
+    getFeatures();
+    const intervalId = window.setInterval(() => {
+      getPlans();
+      getFeatures();
+    }, 10000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -295,13 +359,14 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+          <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -797,6 +862,91 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Features Settings */}
+        <TabsContent value="features" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="h-5 w-5" />
+                  <span>Plan Features</span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Feature name"
+                  value={newFeatureName}
+                  onChange={(e) => setNewFeatureName(e.target.value)}
+                />
+                <Button onClick={handleCreateFeature}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Feature
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-sm text-muted-foreground">
+                      <th className="p-2">ID</th>
+                      <th className="p-2">Name</th>
+                      <th className="p-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {featuresLoading && (
+                      <tr>
+                        <td className="p-2" colSpan={3}>Loading...</td>
+                      </tr>
+                    )}
+                    {!featuresLoading && features.length === 0 && (
+                      <tr>
+                        <td className="p-2" colSpan={3}>No features found</td>
+                      </tr>
+                    )}
+                    {features.map((f: any) => (
+                      <tr key={f.id} className="border-t">
+                        <td className="p-2 align-top">{f.id}</td>
+                        <td className="p-2 align-top font-medium">{f.name ?? '-'}</td>
+                        <td className="p-2 align-top">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive">
+                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Feature</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the "{f.name}" feature? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteFeature(String(f.id))}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -881,6 +1031,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
       };
 
       onSave(localPlan);
+      
       
     } catch (err) {
       // toast.promise already shows error; ensure we don't swallow it
