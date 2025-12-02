@@ -143,19 +143,16 @@ export default function SettingsPage() {
         return;
       }
       const mapped = data.map((p: any) => {
-        const features = {
-          backups: false,
-          monitoring: false,
-          prioritySupport: false,
-        };
+        // Build a dynamic features selection map using backend IDs
+        const selectedFeatures: Record<number, boolean> = {};
         (p.subscriptionPlanFeatures || []).forEach((sf:any) => {
           const backendFeatureId = sf?.planFeature?.id ?? sf.featureId;
           const enabled = Boolean(sf.enabled);
-
-          if (backendFeatureId === FEATURE_MAP.backups) features.backups = enabled;
-          if (backendFeatureId === FEATURE_MAP.monitoring) features.monitoring = enabled;
-          if (backendFeatureId === FEATURE_MAP.prioritySupport) features.prioritySupport = enabled;
+          if (backendFeatureId != null) {
+            selectedFeatures[Number(backendFeatureId)] = enabled;
+          }
         });
+
         return {
           id: String(p.id),
           name: p.name ?? '',
@@ -165,7 +162,15 @@ export default function SettingsPage() {
           maxMembers: p.memberLimit ?? 1,
           durationMonths: p.durationInMonths ?? 1,
           price: p.price ?? 0,
-          features,
+          // keep UI compatibility by exposing booleans for known labels if present
+          features: {
+            // Rendered table will still check these three keys for display text
+            backups: selectedFeatures[1] ?? false,
+            monitoring: selectedFeatures[2] ?? false,
+            prioritySupport: selectedFeatures[3] ?? false,
+            // also retain the raw dynamic map
+            _map: selectedFeatures,
+          },
         };
       });
 
@@ -182,7 +187,9 @@ export default function SettingsPage() {
       setFeaturesLoading(true);
       const { data } = await axiosSuperAdmin.get('/feature');
       console.log("Fetched features", data);
-      setFeatures(Array.isArray(data.data) ? data.data : []);
+      const list = Array.isArray(data.data) ? data.data : [];
+      // normalize ids as numbers
+      setFeatures(list.map((f: any) => ({ id: Number(f.id), name: f.name })));
     } catch (error) {
       console.error('Failed to fetch features', error);
       toast.error('Failed to fetch features');
@@ -954,6 +961,17 @@ export default function SettingsPage() {
 
 // PlanForm component inserted locally in this file
 function PlanForm({ initialData, onSave, onCancel }: any) {
+  // pull dynamic features from parent via a simple window global or prop if preferred
+  // Since we're in the same file, we can pass features as a prop. Update the usage below.
+  // For this snippet, we'll read from a global via a callback passed by parent.
+  // But simpler: accept features via prop. See usage tweak at Dialog section below.
+
+  const [availableFeatures, setAvailableFeatures] = useState<{id:number; name:string}[]>([]);
+  // initialize selections: a map of featureId -> boolean
+  const initialFeatureMap: Record<number, boolean> =
+    (initialData?.features?._map) ??
+    {}; // if editing an existing plan, use its dynamic map; otherwise empty
+
   const [form, setForm] = useState(() => ({
     id: initialData?.id ?? undefined,
     name: initialData?.name ?? '',
@@ -963,7 +981,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
     maxMembers: initialData?.maxMembers ?? 1,
     durationMonths: initialData?.durationMonths ?? 1,
     price: initialData?.price ?? 0,
-    features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+    featureMap: initialFeatureMap,
   }));
 
   // sync when editingPlan changes
@@ -977,9 +995,33 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
       maxMembers: initialData?.maxMembers ?? 1,
       durationMonths: initialData?.durationMonths ?? 1,
       price: initialData?.price ?? 0,
-      features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+      featureMap: initialData?.features?._map ?? {},
     });
   }, [initialData]);
+
+  // fetch available features for the form independently to keep it fresh
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await axiosSuperAdmin.get('/feature');
+        const list = Array.isArray(data.data) ? data.data : [];
+        const normalized = list.map((f: any) => ({ id: Number(f.id), name: f.name }));
+        if (mounted) setAvailableFeatures(normalized);
+        // ensure featureMap has keys for all features
+        setForm(prev => ({
+          ...prev,
+          featureMap: normalized.reduce((acc: Record<number, boolean>, f:any) => {
+            acc[f.id] = prev.featureMap[f.id] ?? false;
+            return acc;
+          }, {}),
+        }));
+      } catch (e) {
+        console.error('Failed to load features in PlanForm', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Build payload expected by backend
   const buildBackendPayload = () => ({
@@ -990,9 +1032,9 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
     storageInGB: Number(form.storageGB),
     cpu: Number(form.cpu),
     ram: Number(form.ramGB),
-    feature: Object.keys(FEATURE_MAP).map((key) => ({
-      featureId: FEATURE_MAP[key],
-      enabled: Boolean((form.features as any)[key]),
+    feature: Object.entries(form.featureMap).map(([featureId, enabled]) => ({
+      featureId: Number(featureId),
+      enabled: Boolean(enabled),
     })),
   });
 
@@ -1027,14 +1069,19 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
         maxMembers: form.maxMembers,
         durationMonths: form.durationMonths,
         price: form.price,
-        features: form.features,
+        // expose both legacy keys (for table display) and dynamic map
+        features: {
+          backups: form.featureMap[1] ?? false,
+          monitoring: form.featureMap[2] ?? false,
+          prioritySupport: form.featureMap[3] ?? false,
+          _map: { ...form.featureMap },
+        },
       };
 
       onSave(localPlan);
       
       
     } catch (err) {
-      // toast.promise already shows error; ensure we don't swallow it
       console.error('Plan submit error', err);
     }
   };
@@ -1074,21 +1121,24 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
 
       <div className="space-y-2">
         <Label>Features</Label>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.backups} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, backups: v } })} />
-            <span className="text-sm">Backups</span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.monitoring} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, monitoring: v } })} />
-            <span className="text-sm">Monitoring</span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.prioritySupport} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, prioritySupport: v } })} />
-            <span className="text-sm">Priority Support</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {availableFeatures.length === 0 && (
+            <span className="text-sm text-muted-foreground">No features found</span>
+          )}
+          {availableFeatures.map((f) => (
+            <div className="flex items-center space-x-2" key={f.id}>
+              <Switch
+                checked={Boolean(form.featureMap[f.id])}
+                onCheckedChange={(v: boolean) =>
+                  setForm(prev => ({
+                    ...prev,
+                    featureMap: { ...prev.featureMap, [f.id]: v }
+                  }))
+                }
+              />
+              <span className="text-sm">{f.name}</span>
+            </div>
+          ))}
         </div>
       </div>
 
