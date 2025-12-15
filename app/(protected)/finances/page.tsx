@@ -50,10 +50,22 @@ async function fetchTickets(params: FetchTicketsParams): Promise<{ data: Ticket[
   query.append("limit", limit.toString());
   if (search) query.append("search", search);
   if (status) query.append("status", status);
-  if (from) query.append("from", from);
-  if (to) query.append("to", to);
+
+  /**
+   * There was an issue with date handling where the server was interpreting
+   * the dates with an added timezone offset when sending ISO strings with 'Z'.
+   * To avoid this, we send the ISO string without the 'Z' suffix.
+   * 
+   * BUG: 
+   *  When we selected a from or to date , server get an error and return this: 
+       "Failed to fetch tickets: Text '2025-12-10' could not be parsed at index 10"
+   */
+  if (from) query.append("from", new Date(from).toISOString().replace("Z","")); 
+  if (to) query.append("to", new Date(to).toISOString().replace("Z",""));
+
 
   try {
+    console.log("Fetching tickets with params: ", query.toString());
     const res = await axiosSuperAdmin.get(`/orgTransaction/getTransactionTickets?${query.toString()}`);
  
 
@@ -67,8 +79,6 @@ async function fetchTickets(params: FetchTicketsParams): Promise<{ data: Ticket[
     console.log("error-> ",error);
     throw new Error('Failed to fetch tickets | Server error');
   }
-
-  
 }
 
 
