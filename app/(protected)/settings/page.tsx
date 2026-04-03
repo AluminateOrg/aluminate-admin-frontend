@@ -145,7 +145,7 @@ export default function SettingsPage() {
       const mapped = data.map((p: any) => {
         // Build a dynamic features selection map using backend IDs
         const selectedFeatures: Record<number, boolean> = {};
-        (p.subscriptionPlanFeatures || []).forEach((sf:any) => {
+        (p.subscriptionPlanFeatures || []).forEach((sf: any) => {
           const backendFeatureId = sf?.planFeature?.id ?? sf.featureId;
           const enabled = Boolean(sf.enabled);
           if (backendFeatureId != null) {
@@ -225,8 +225,8 @@ export default function SettingsPage() {
 
   const handleDeletePlan = async (id: string) => {
     try {
-      
-      const {data} = await axiosSuperAdmin.get(`/subscription-plan/delete/${id}`);
+
+      const { data } = await axiosSuperAdmin.get(`/subscription-plan/delete/${id}`);
       if (data) {
         getPlans();
         toast.success('Plan deleted');
@@ -847,8 +847,7 @@ export default function SettingsPage() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Delete Plan</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to delete the "{plan.name}" plan? This action cannot be undone.
-                                    </AlertDialogDescription>
+                                      Are you sure you want to delete the &quot;{plan.name}&quot; plan? This action cannot be undone.                                    </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -931,8 +930,7 @@ export default function SettingsPage() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Feature</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete the "{f.name}" feature? This action cannot be undone.
-                                </AlertDialogDescription>
+                                  Are you sure you want to delete the &quot;{f.name}&quot; feature? This action cannot be undone.                                </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -966,7 +964,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
   // For this snippet, we'll read from a global via a callback passed by parent.
   // But simpler: accept features via prop. See usage tweak at Dialog section below.
 
-  const [availableFeatures, setAvailableFeatures] = useState<{id:number; name:string}[]>([]);
+  const [availableFeatures, setAvailableFeatures] = useState<{ id: number; name: string }[]>([]);
   // initialize selections: a map of featureId -> boolean
   const initialFeatureMap: Record<number, boolean> =
     (initialData?.features?._map) ??
@@ -1011,7 +1009,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
         // ensure featureMap has keys for all features
         setForm(prev => ({
           ...prev,
-          featureMap: normalized.reduce((acc: Record<number, boolean>, f:any) => {
+          featureMap: normalized.reduce((acc: Record<number, boolean>, f: any) => {
             acc[f.id] = prev.featureMap[f.id] ?? false;
             return acc;
           }, {}),
@@ -1079,8 +1077,8 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
       };
 
       onSave(localPlan);
-      
-      
+
+
     } catch (err) {
       console.error('Plan submit error', err);
     }
