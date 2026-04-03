@@ -129,6 +129,11 @@ export default function SettingsPage() {
   const [plansDialogOpen, setPlansDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null as any);
 
+  // Features state
+  const [features, setFeatures] = useState<any[]>([]);
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [newFeatureName, setNewFeatureName] = useState('');
+
   const getPlans = async () => {
     try {
       const { data } = await axiosSuperAdmin.get('/subscription-plan')
@@ -138,19 +143,16 @@ export default function SettingsPage() {
         return;
       }
       const mapped = data.map((p: any) => {
-        const features = {
-          backups: false,
-          monitoring: false,
-          prioritySupport: false,
-        };
+        // Build a dynamic features selection map using backend IDs
+        const selectedFeatures: Record<number, boolean> = {};
         (p.subscriptionPlanFeatures || []).forEach((sf:any) => {
           const backendFeatureId = sf?.planFeature?.id ?? sf.featureId;
           const enabled = Boolean(sf.enabled);
-
-          if (backendFeatureId === FEATURE_MAP.backups) features.backups = enabled;
-          if (backendFeatureId === FEATURE_MAP.monitoring) features.monitoring = enabled;
-          if (backendFeatureId === FEATURE_MAP.prioritySupport) features.prioritySupport = enabled;
+          if (backendFeatureId != null) {
+            selectedFeatures[Number(backendFeatureId)] = enabled;
+          }
         });
+
         return {
           id: String(p.id),
           name: p.name ?? '',
@@ -160,7 +162,15 @@ export default function SettingsPage() {
           maxMembers: p.memberLimit ?? 1,
           durationMonths: p.durationInMonths ?? 1,
           price: p.price ?? 0,
-          features,
+          // keep UI compatibility by exposing booleans for known labels if present
+          features: {
+            // Rendered table will still check these three keys for display text
+            backups: selectedFeatures[1] ?? false,
+            monitoring: selectedFeatures[2] ?? false,
+            prioritySupport: selectedFeatures[3] ?? false,
+            // also retain the raw dynamic map
+            _map: selectedFeatures,
+          },
         };
       });
 
@@ -172,9 +182,22 @@ export default function SettingsPage() {
     }
   }
 
-  useEffect(() => {
-    getPlans()
-  },[])
+  const getFeatures = async () => {
+    try {
+      setFeaturesLoading(true);
+      const { data } = await axiosSuperAdmin.get('/feature');
+      console.log("Fetched features", data);
+      const list = Array.isArray(data.data) ? data.data : [];
+      // normalize ids as numbers
+      setFeatures(list.map((f: any) => ({ id: Number(f.id), name: f.name })));
+    } catch (error) {
+      console.error('Failed to fetch features', error);
+      toast.error('Failed to fetch features');
+      setFeatures([]);
+    } finally {
+      setFeaturesLoading(false);
+    }
+  };
 
   const openCreateDialog = () => {
     setEditingPlan(null);
@@ -214,6 +237,44 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Failed to delete plan', error);
       toast.error('Failed to delete plan');
+    }
+  };
+
+  const handleCreateFeature = async () => {
+    const name = newFeatureName.trim();
+    if (!name) {
+      toast.error('Feature name is required');
+      return;
+    }
+    try {
+      await toast.promise(
+        axiosSuperAdmin.post('/feature/create', { name }),
+        {
+          loading: 'Creating feature...',
+          success: 'Feature created',
+          error: 'Failed to create feature',
+        }
+      );
+      setNewFeatureName('');
+      getFeatures();
+    } catch (error) {
+      console.error('Create feature error', error);
+    }
+  };
+
+  const handleDeleteFeature = async (id: string) => {
+    try {
+      await toast.promise(
+        axiosSuperAdmin.get(`/feature/delete/${id}`),
+        {
+          loading: 'Deleting feature...',
+          success: 'Feature deleted',
+          error: 'Failed to delete feature',
+        }
+      );
+      getFeatures();
+    } catch (error) {
+      console.error('Delete feature error', error);
     }
   };
 
@@ -272,6 +333,16 @@ export default function SettingsPage() {
     );
   };
 
+  useEffect(() => {
+    getPlans();
+    getFeatures();
+    const intervalId = window.setInterval(() => {
+      getPlans();
+      getFeatures();
+    }, 10000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -295,13 +366,14 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+          <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -797,6 +869,91 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Features Settings */}
+        <TabsContent value="features" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="h-5 w-5" />
+                  <span>Plan Features</span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Feature name"
+                  value={newFeatureName}
+                  onChange={(e) => setNewFeatureName(e.target.value)}
+                />
+                <Button onClick={handleCreateFeature}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Feature
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-sm text-muted-foreground">
+                      <th className="p-2">ID</th>
+                      <th className="p-2">Name</th>
+                      <th className="p-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {featuresLoading && (
+                      <tr>
+                        <td className="p-2" colSpan={3}>Loading...</td>
+                      </tr>
+                    )}
+                    {!featuresLoading && features.length === 0 && (
+                      <tr>
+                        <td className="p-2" colSpan={3}>No features found</td>
+                      </tr>
+                    )}
+                    {features.map((f: any) => (
+                      <tr key={f.id} className="border-t">
+                        <td className="p-2 align-top">{f.id}</td>
+                        <td className="p-2 align-top font-medium">{f.name ?? '-'}</td>
+                        <td className="p-2 align-top">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive">
+                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Feature</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the "{f.name}" feature? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteFeature(String(f.id))}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -804,6 +961,17 @@ export default function SettingsPage() {
 
 // PlanForm component inserted locally in this file
 function PlanForm({ initialData, onSave, onCancel }: any) {
+  // pull dynamic features from parent via a simple window global or prop if preferred
+  // Since we're in the same file, we can pass features as a prop. Update the usage below.
+  // For this snippet, we'll read from a global via a callback passed by parent.
+  // But simpler: accept features via prop. See usage tweak at Dialog section below.
+
+  const [availableFeatures, setAvailableFeatures] = useState<{id:number; name:string}[]>([]);
+  // initialize selections: a map of featureId -> boolean
+  const initialFeatureMap: Record<number, boolean> =
+    (initialData?.features?._map) ??
+    {}; // if editing an existing plan, use its dynamic map; otherwise empty
+
   const [form, setForm] = useState(() => ({
     id: initialData?.id ?? undefined,
     name: initialData?.name ?? '',
@@ -813,7 +981,7 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
     maxMembers: initialData?.maxMembers ?? 1,
     durationMonths: initialData?.durationMonths ?? 1,
     price: initialData?.price ?? 0,
-    features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+    featureMap: initialFeatureMap,
   }));
 
   // sync when editingPlan changes
@@ -827,9 +995,33 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
       maxMembers: initialData?.maxMembers ?? 1,
       durationMonths: initialData?.durationMonths ?? 1,
       price: initialData?.price ?? 0,
-      features: initialData?.features ?? { backups: false, monitoring: false, prioritySupport: false },
+      featureMap: initialData?.features?._map ?? {},
     });
   }, [initialData]);
+
+  // fetch available features for the form independently to keep it fresh
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await axiosSuperAdmin.get('/feature');
+        const list = Array.isArray(data.data) ? data.data : [];
+        const normalized = list.map((f: any) => ({ id: Number(f.id), name: f.name }));
+        if (mounted) setAvailableFeatures(normalized);
+        // ensure featureMap has keys for all features
+        setForm(prev => ({
+          ...prev,
+          featureMap: normalized.reduce((acc: Record<number, boolean>, f:any) => {
+            acc[f.id] = prev.featureMap[f.id] ?? false;
+            return acc;
+          }, {}),
+        }));
+      } catch (e) {
+        console.error('Failed to load features in PlanForm', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Build payload expected by backend
   const buildBackendPayload = () => ({
@@ -840,9 +1032,9 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
     storageInGB: Number(form.storageGB),
     cpu: Number(form.cpu),
     ram: Number(form.ramGB),
-    feature: Object.keys(FEATURE_MAP).map((key) => ({
-      featureId: FEATURE_MAP[key],
-      enabled: Boolean((form.features as any)[key]),
+    feature: Object.entries(form.featureMap).map(([featureId, enabled]) => ({
+      featureId: Number(featureId),
+      enabled: Boolean(enabled),
     })),
   });
 
@@ -877,13 +1069,19 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
         maxMembers: form.maxMembers,
         durationMonths: form.durationMonths,
         price: form.price,
-        features: form.features,
+        // expose both legacy keys (for table display) and dynamic map
+        features: {
+          backups: form.featureMap[1] ?? false,
+          monitoring: form.featureMap[2] ?? false,
+          prioritySupport: form.featureMap[3] ?? false,
+          _map: { ...form.featureMap },
+        },
       };
 
       onSave(localPlan);
       
+      
     } catch (err) {
-      // toast.promise already shows error; ensure we don't swallow it
       console.error('Plan submit error', err);
     }
   };
@@ -923,21 +1121,24 @@ function PlanForm({ initialData, onSave, onCancel }: any) {
 
       <div className="space-y-2">
         <Label>Features</Label>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.backups} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, backups: v } })} />
-            <span className="text-sm">Backups</span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.monitoring} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, monitoring: v } })} />
-            <span className="text-sm">Monitoring</span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch checked={form.features.prioritySupport} onCheckedChange={(v: any) => setForm({ ...form, features: { ...form.features, prioritySupport: v } })} />
-            <span className="text-sm">Priority Support</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {availableFeatures.length === 0 && (
+            <span className="text-sm text-muted-foreground">No features found</span>
+          )}
+          {availableFeatures.map((f) => (
+            <div className="flex items-center space-x-2" key={f.id}>
+              <Switch
+                checked={Boolean(form.featureMap[f.id])}
+                onCheckedChange={(v: boolean) =>
+                  setForm(prev => ({
+                    ...prev,
+                    featureMap: { ...prev.featureMap, [f.id]: v }
+                  }))
+                }
+              />
+              <span className="text-sm">{f.name}</span>
+            </div>
+          ))}
         </div>
       </div>
 

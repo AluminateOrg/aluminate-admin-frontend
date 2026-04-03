@@ -102,12 +102,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await checkAuth();
         router.push('/dashboard');
       } else {
-        throw new Error('Login failed');
         console.error('Login failed:', res.statusText);
+        throw new Error('Login failed');
+        
       }
     } catch (error) {
-      throw error; // Rethrow the error to be handled in the component
       console.error('Login error:', error);
+      throw error; // Rethrow the error to be handled in the component
+      
     }
     
     
