@@ -1,25 +1,19 @@
 name: Admin Frontend CD
-
 on:
   push:
     branches: [ production ]
-
 permissions:
   contents: read
-
 concurrency:
   group: production-admin-frontend-cd
   cancel-in-progress: true
-
 jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Build Docker Image
         env:
           NEXT_PUBLIC_BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
@@ -33,10 +27,8 @@ jobs:
             -t aluminate/admin-frontend:${{ github.sha }} \
             -t aluminate/admin-frontend:latest \
             .
-
       - name: Save Docker Image
         run: docker save aluminate/admin-frontend:latest | gzip > admin-frontend.tar.gz
-
       - name: Copy Image to Droplet
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -44,9 +36,8 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: admin-frontend.tar.gz
-          target: /opt/aluminate/app/aluminate-global-backend/
+          target: /opt/aluminate/app/aluminate-admin-frontend/
           rm: false
-
       - name: Load & Restart on Droplet
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -55,30 +46,28 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-
             echo "Loading new Docker image..."
-            cd /opt/aluminate/app/aluminate-global-backend
+            cd /opt/aluminate/app/aluminate-admin-frontend
             docker load < admin-frontend.tar.gz
             rm -f admin-frontend.tar.gz
-
             echo "Recreating admin-frontend container..."
-            docker compose -f /opt/aluminate/app/aluminate-global-backend/docker-compose.yml \
-              up -d --force-recreate --no-deps admin-frontend
-
+            docker compose \
+              -p aluminate-global-backend \
+              -f /opt/aluminate/config/docker-compose.yml \
+              --env-file /opt/aluminate/config/global.env \
+              up -d --force-recreate --no-deps --remove-orphans admin-frontend
             echo "Cleaning unused images..."
             docker image prune -f
-
             echo "Waiting for startup..."
             sleep 15
-
             echo "Container status:"
-            docker ps | grep aluminate-global-backend-admin-frontend
-
+            docker ps | grep admin-frontend
             echo "Recent logs:"
-            docker compose -f /opt/aluminate/app/aluminate-global-backend/docker-compose.yml \
+            docker compose \
+              -p aluminate-global-backend \
+              -f /opt/aluminate/config/docker-compose.yml \
+              --env-file /opt/aluminate/config/global.env \
               logs --tail=50 admin-frontend
-
             echo "Deployment complete"
-
       - name: Deployment Success
         run: echo "Admin Frontend deployed to Production"
